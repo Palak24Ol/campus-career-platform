@@ -44,7 +44,7 @@
         <module>services/student-service</module>
 
 
-        <!-- <module>services/company-service</module>    -->
+        <module>services/company-service</module>
 
 
         <!-- <module>services/job-service</module>        -->

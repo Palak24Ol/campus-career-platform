@@ -13,7 +13,7 @@ COPY infrastructure/eureka-server/pom.xml        infrastructure/eureka-server/po
 COPY infrastructure/api-gateway/pom.xml          infrastructure/api-gateway/pom.xml
 COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
-
+COPY services/company-service/pom.xml            services/company-service/pom.xml
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
         -q

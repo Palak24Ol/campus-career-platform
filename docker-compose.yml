@@ -254,26 +254,26 @@ services:
 
   # COMPANY SERVICE
 
-  # company-service:
-  #   build:
-  #     context: .
-  #     dockerfile: services/company-service/Dockerfile
-  #   container_name: campus-company
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     eureka-server:
-  #       condition: service_healthy
-  #   environment:
-  #     SPRING_PROFILES_ACTIVE: docker
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company_db
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
-  #   ports:
-  #     - "${COMPANY_SERVICE_PORT:-8083}:8083"
-  #   networks:
-  #     - campus-network
+  company-service:
+    build:
+      context: .
+      dockerfile: services/company-service/Dockerfile
+    container_name: campus-company
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+    ports:
+      - "${COMPANY_SERVICE_PORT:-8083}:8083"
+    networks:
+      - campus-network
 
   # JOB SERVICE
 
