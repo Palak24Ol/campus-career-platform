@@ -496,11 +496,6 @@ java -jar services/auth-service/target/auth-service-1.0.0-SNAPSHOT.jar
 ```
 
 ---
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
+ 
 
  
