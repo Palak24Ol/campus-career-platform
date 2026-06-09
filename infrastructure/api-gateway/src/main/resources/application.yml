@@ -1,0 +1,309 @@
+
+
+spring:
+  application:
+    name: api-gateway        # Registers with Eureka under this name
+
+  #  Redis
+  # Used for rate limiting only (RedisRateLimiter token buckets).
+  # Redis runs in Docker even during local dev (docker compose up redis -d).
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # timeout: 2s — if Redis is unreachable, fail fast vs. hang
+      timeout: 2s
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+
+  #  Cloud Gateway
+  cloud:
+    gateway:
+
+      default-filters:
+        # DedupeResponseHeader: remove duplicate headers added by gateway + service.
+        # RETAIN_FIRST keeps the first occurrence (our injected value wins).
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+      # CORS
+      # Handle CORS at the gateway so no service needs to configure it.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:3000"    # React dev server
+              - "http://localhost:5173"    # Vite dev server
+              - "http://localhost:4200"    # Angular dev server
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            exposedHeaders:
+              - "X-User-Id"
+              - "X-User-Role"
+            allowCredentials: true
+            maxAge: 3600
+
+      # Routes
+      routes:
+
+        # AUTH SERVICE — port 8081
+
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: auth-service-cb
+                fallbackUri: forward:/fallback/
+
+        # STUDENT SERVICE — port 8082
+
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/students/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: student-service-cb
+                fallbackUri: forward:/fallback/student
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # COMPANY SERVICE — port 8083
+
+        - id: company-service
+          uri: lb://company-service
+          predicates:
+            - Path=/companies/**, /admin/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: company-service-cb
+                fallbackUri: forward:/fallback/company
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # JOB SERVICE — port 8084
+
+        - id: job-service
+          uri: lb://job-service
+          predicates:
+            - Path=/jobs/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: job-service-cb
+                fallbackUri: forward:/fallback/job
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # APPLICATION SERVICE — port 8085
+
+        - id: application-service
+          uri: lb://application-service
+          predicates:
+            - Path=/applications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: application-service-cb
+                fallbackUri: forward:/fallback/application
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # INTERVIEW SERVICE — port 8086
+
+        - id: interview-service
+          uri: lb://interview-service
+          predicates:
+            - Path=/interviews/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: interview-service-cb
+                fallbackUri: forward:/fallback/interview
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # NOTIFICATION SERVICE — port 8087
+
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/notifications/**, /ws/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notification-service-cb
+                fallbackUri: forward:/fallback/notification
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+        # ANALYTICS SERVICE — port 8088
+
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/analytics/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: analytics-service-cb
+                fallbackUri: forward:/fallback/analytics
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@redisRateLimiter}"
+                key-resolver: "#{@userIdKeyResolver}"
+
+# JWT SECRET
+
+jwt:
+  secret: ${JWT_SECRET:local_dev_secret_min_32_chars_required}
+
+
+# EUREKA CLIENT
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# RESILIENCE4J — Circuit Breaker defaults
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        # Minimum calls before failure rate is calculated.
+        # Prevents tripping on the first few requests at startup.
+        minimumNumberOfCalls: 5
+
+        # Trip to OPEN when 50%+ of calls fail.
+        failureRateThreshold: 50
+
+        # How many calls to evaluate for failure rate.
+        slidingWindowSize: 10
+
+        # How long to stay OPEN before trying HALF_OPEN.
+        waitDurationInOpenState: 10s
+
+        # In HALF_OPEN: allow 3 test calls before deciding state.
+        permittedNumberOfCallsInHalfOpenState: 3
+
+        # Count exceptions as failures (network errors, 5xx responses).
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.server.ResponseStatusException
+
+    instances:
+      auth-service-cb:
+        baseConfig: default
+      student-service-cb:
+        baseConfig: default
+      company-service-cb:
+        baseConfig: default
+      job-service-cb:
+        baseConfig: default
+      application-service-cb:
+        baseConfig: default
+      interview-service-cb:
+        baseConfig: default
+      notification-service-cb:
+        baseConfig: default
+      analytics-service-cb:
+        baseConfig: default
+
+  # Timeout for each downstream service call.
+  # If service doesn't respond in 5s, circuit breaker counts it as a failure.
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+
+
+# ACTUATOR
+# /actuator/health        → Docker healthcheck + monitoring
+# /actuator/gateway/routes → Lists all configured routes (useful for debugging)
+# /actuator/metrics       → Micrometer metrics (Milestone 10: Prometheus)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, gateway, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  info:
+    env:
+      enabled: true
+
+# LOGGING
+
+logging:
+  level:
+    root: INFO
+    com.campus.gateway: DEBUG
+    # Show which route was matched (useful for debugging routing issues)
+    org.springframework.cloud.gateway: INFO
+    # Show reactor netty connection logs (set to DEBUG only for deep debugging)
+    reactor.netty: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: 6379
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    hostname: api-gateway
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_HOST:eureka-server}:8761/eureka/

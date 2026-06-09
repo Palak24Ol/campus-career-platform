@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.4</version>
+        <relativePath/>
+    </parent>
+
+
+    <groupId>com.campus</groupId>
+    <artifactId>campus-career-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>campus-career-platform</name>
+    <description>
+        Campus Career and Recruitment Platform — 8 Spring Boot Microservices
+        with Kafka, Redis, MinIO, WebSocket, Prometheus, Grafana, Eureka, and JWT.
+    </description>
+
+
+    <modules>
+
+        <module>shared/shared-events</module>
+
+
+        <module>infrastructure/eureka-server</module>
+
+
+        <module>infrastructure/api-gateway</module>
+
+
+        <module>services/auth-service</module>
+
+
+        <module>services/student-service</module>
+
+
+        <!-- <module>services/company-service</module>    -->
+
+
+        <!-- <module>services/job-service</module>        -->
+
+
+        <!-- <module>services/application-service</module>-->
+
+
+        <!-- <module>services/interview-service</module>  -->
+
+
+        <!-- <module>services/notification-service</module>-->
+
+        <!-- <module>services/analytics-service</module>  -->
+    </modules>
+
+
+    <properties>
+        <java.version>17</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Spring Cloud — must be aligned with Spring Boot version.
+             Boot 3.2.x → Cloud 2023.0.x -->
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+
+        <!-- Security — JWT library -->
+        <jjwt.version>0.12.5</jjwt.version>
+
+        <!-- Code generation -->
+        <lombok.version>1.18.30</lombok.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+
+        <!-- API Documentation -->
+        <springdoc.version>2.3.0</springdoc.version>
+
+        <!-- Database migration -->
+        <flyway.version>10.8.1</flyway.version>
+
+        <!-- Fault tolerance -->
+        <resilience4j.version>2.2.0</resilience4j.version>
+
+        <!-- Object storage (AWS SDK works with MinIO via endpoint override) -->
+        <aws-sdk.version>2.24.13</aws-sdk.version>
+
+        <!-- Testing -->
+        <testcontainers.version>1.19.6</testcontainers.version>
+    </properties>
+
+
+    <dependencyManagement>
+        <dependencies>
+
+            <!-- Spring Cloud BOM  -->
+            <!-- Imports Eureka, Gateway, LoadBalancer, Config versions -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Resilience4j BOM  -->
+            <!-- Circuit breaker, retry, rate limiter versions -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!--AWS SDK BOM (used for MinIO)  -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws-sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!--Testcontainers BOM  -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Our own shared-events library  -->
+            <!-- Services add this as a dependency; version managed here -->
+            <dependency>
+                <groupId>com.campus</groupId>
+                <artifactId>shared-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- JWT (JJWT 0.12.x — 3-artifact split) -->
+            <!-- API: compile-time classes and interfaces -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <!-- Impl: runtime implementation (scope=runtime on purpose) -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <!-- Jackson integration for JWT serialization -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+
+
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <!-- WebFlux variant for API Gateway (which uses Reactor Netty) -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!--Database Migration-->
+
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+
+    <dependencies>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+
+    <build>
+        <pluginManagement>
+            <plugins>
+
+
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <source>${java.version}</source>
+                        <target>${java.version}</target>
+                        <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.flywaydb</groupId>
+                    <artifactId>flyway-maven-plugin</artifactId>
+                    <version>${flyway.version}</version>
+                </plugin>
+
+                <!-- Surefire — runs JUnit 5 tests (Boot parent handles version) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <useModulePath>false</useModulePath>
+                    </configuration>
+                </plugin>
+
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

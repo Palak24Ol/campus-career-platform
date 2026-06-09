@@ -1,0 +1,107 @@
+
+spring:
+  application:
+
+    name: eureka-server
+
+server:
+  # ${SERVER_PORT:8761} reads env var SERVER_PORT, falls back to 8761.
+  # Override per environment: SERVER_PORT=9000 java -jar eureka-server.jar
+  port: ${SERVER_PORT:8761}
+
+eureka:
+  instance:
+
+    hostname: localhost
+
+    prefer-ip-address: false
+
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+  client:
+
+    register-with-eureka: false
+
+    fetch-registry: false
+
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+
+  server:
+
+    enable-self-preservation: false
+
+
+    # Default is 60000ms (1 min). 5000ms = 5s for fast dev iteration.
+    eviction-interval-timer-in-ms: 5000
+
+    # Minimum % of registered instances that must send heartbeats
+    # before self-preservation triggers. Ignored when self-preservation=false.
+    renewal-percent-threshold: 0.85
+
+    # Peer sync timeout in ms. Only relevant in multi-instance HA setup.
+    peer-node-connect-timeout-ms: 1000
+
+
+# ACTUATOR
+# /actuator/health → used by docker-compose healthcheck
+# /actuator/info   → application metadata
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+      base-path: /actuator
+  endpoint:
+    health:
+
+      show-details: always
+  info:
+    env:
+      enabled: true
+
+# Application info visible at /actuator/info
+info:
+  app:
+    name: Campus Career Platform — Eureka Server
+    version: 1.0.0
+    description: Service Registry for all Campus Career microservices
+
+# LOGGING
+
+logging:
+  level:
+    root: INFO
+    com.campus.eureka: DEBUG
+    # Suppress Netflix internals — extremely noisy at INFO
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+    # Suppress Spring Cloud Netflix wrapper logs
+    org.springframework.cloud.netflix: WARN
+    # Suppress HTTP client logs for heartbeats
+    com.sun.jersey: WARN
+    com.sun.jersey.api.client: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+eureka:
+  instance:
+
+    hostname: eureka-server
+    prefer-ip-address: false
+
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+
+      defaultZone: http://eureka-server:${server.port}/eureka/

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.campus</groupId>
+        <artifactId>campus-career-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>eureka-server</artifactId>
+    <name>eureka-server</name>
+    <description>
+        Netflix Eureka Service Registry.
+        All microservices register with this server at startup.
+        The API Gateway uses this for client-side load balancing (lb://service-name).
+        Dashboard: http://localhost:8761
+    </description>
+
+    <dependencies>
+
+        <!-- ─── Core: Netflix Eureka Server ──────────────────────── -->
+        <!-- Includes the Eureka server, dashboard (Freemarker UI),
+             and auto-configuration via @EnableEurekaServer -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+
+        <!-- ─── Actuator ─────────────────────────────────────────── -->
+        <!-- Exposes /actuator/health — used by docker-compose health check
+             and by other services to verify Eureka is UP before registering -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin — creates executable fat JAR.
+                 The Dockerfile copies this JAR as app.jar.
+                 shared-events module overrides this with skip=true (no fat JAR needed).
+                 This module explicitly enables it to produce a runnable JAR. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

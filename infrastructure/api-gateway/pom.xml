@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.campus</groupId>
+        <artifactId>campus-career-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>api-gateway</artifactId>
+    <name>api-gateway</name>
+    <description>
+        Spring Cloud Gateway — single entry point for all client traffic.
+        Responsibilities:
+          1. JWT validation (global pre-filter) — downstream services trust X-User-Id / X-User-Role headers
+          2. Route all /auth/**, /students/**, /companies/**, /jobs/**, /applications/**,
+             /interviews/**, /notifications/**, /analytics/** to the correct microservice
+          3. Redis-backed rate limiting (10 req/s per user, burst 20)
+          4. Resilience4j circuit breaker per route — 503 with fallback on downstream failure
+          5. Request logging filter for observability
+
+        CRITICAL — WebFlux, NOT WebMVC:
+          Spring Cloud Gateway runs on Reactor Netty (non-blocking).
+          Do NOT add spring-boot-starter-web here — it conflicts with Gateway.
+          Everything here is reactive: ServerWebExchange, Mono, WebFilter, etc.
+    </description>
+
+    <dependencies>
+
+        <!-- ─── Core: Spring Cloud Gateway ───────────────────────── -->
+        <!-- Includes: Reactor Netty, WebFlux, route matching, filters -->
+        <!-- DO NOT add spring-boot-starter-web — it will conflict    -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!-- ─── Service Discovery: Eureka Client ─────────────────── -->
+        <!-- Enables lb://service-name URIs in routes.               -->
+        <!-- Gateway asks Eureka for live instances and load-balances -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- ─── Redis — Rate Limiting ────────────────────────────── -->
+        <!-- Spring Cloud Gateway's RedisRateLimiter uses Redis for   -->
+        <!-- shared token-bucket state across gateway instances.      -->
+        <!-- Uses Lettuce reactive client (not Jedis) — required for  -->
+        <!-- the reactive pipeline Gateway runs on.                   -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
+        <!-- ─── Circuit Breaker: Resilience4j ───────────────────── -->
+        <!-- spring-cloud-starter-circuitbreaker-reactor-resilience4j -->
+        <!-- Reactive variant — required for WebFlux / Gateway        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+
+        <!-- ─── JWT: JJWT 0.12.x (3-artifact split) ─────────────── -->
+        <!-- API: compile-time interfaces and builders                 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <!-- Impl: runtime only — contains actual parser/builder impl  -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Jackson integration for JWT claim serialization           -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ─── Actuator ─────────────────────────────────────────── -->
+        <!-- /actuator/health → docker-compose healthcheck            -->
+        <!-- /actuator/prometheus → scraped by Prometheus (Milestone 10) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ─── Spring Security (WebFlux variant) ────────────────────── -->
+        <!-- Required for @EnableWebFluxSecurity, ServerHttpSecurity,     -->
+        <!-- SecurityWebFilterChain. Gateway doesn't pull this in         -->
+        <!-- automatically — must be declared explicitly.                 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- ─── OpenAPI / Swagger (WebFlux variant) ──────────────── -->
+        <!-- Gateway aggregates all service Swagger UIs               -->
+        <!-- Use webflux variant — NOT webmvc-ui                      -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

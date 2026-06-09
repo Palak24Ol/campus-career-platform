@@ -1,0 +1,425 @@
+
+services:
+
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: campus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-campus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+
+      POSTGRES_DB: campus_main
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # init-db.sql runs on first container start — creates all 8 service databases
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql:ro
+    networks:
+      - campus-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-campus} -d campus_main" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: campus-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - campus-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: campus-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    networks:
+      - campus-network
+    healthcheck:
+
+      test: [ "CMD", "cub", "zk-ready", "localhost:2181", "40" ]
+      interval: 15s
+      timeout: 45s
+      retries: 5
+      start_period: 30s
+
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: campus-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Listener configuration — must match ADVERTISED_LISTENERS exactly
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Replication (single broker dev setup — all set to 1)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # Topic management
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+
+      # Performance tuning for dev
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "9092:9092"    # Host access
+      - "29092:29092"  # Docker internal (exposed for debugging)
+    networks:
+      - campus-network
+    healthcheck:
+
+      test: [ "CMD", "cub", "kafka-ready", "-b", "localhost:9092", "1", "40" ]
+      interval: 15s
+      timeout: 45s
+      retries: 10
+      start_period: 90s
+
+
+  minio:
+    image: minio/minio:latest
+    container_name: campus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - campus-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+  eureka-server:
+    build:
+      context: .
+      dockerfile: infrastructure/eureka-server/Dockerfile
+    container_name: campus-eureka
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8761
+    ports:
+      - "${EUREKA_SERVER_PORT:-8761}:8761"
+    networks:
+      - campus-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8761/actuator/health | grep -q UP || exit 1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Spring Boot takes 30-60s to start inside a container.
+      # During start_period, failed health checks are not counted.
+      start_period: 90s
+
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: infrastructure/api-gateway/Dockerfile
+    container_name: campus-gateway
+    restart: unless-stopped
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_HOST: eureka-server
+      REDIS_HOST: redis
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"
+    networks:
+      - campus-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health | grep -q UP || exit 1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: campus-auth
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: redis
+    ports:
+      - "${AUTH_SERVICE_PORT:-8081}:8081"
+    networks:
+      - campus-network
+
+
+  student-service:
+    build:
+      context: .
+      dockerfile: services/student-service/Dockerfile
+    container_name: campus-student
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/student_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "${STUDENT_SERVICE_PORT:-8082}:8082"
+    networks:
+      - campus-network
+
+  # COMPANY SERVICE
+
+  # company-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/company-service/Dockerfile
+  #   container_name: campus-company
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #   ports:
+  #     - "${COMPANY_SERVICE_PORT:-8083}:8083"
+  #   networks:
+  #     - campus-network
+
+  # JOB SERVICE
+
+  # job-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/job-service/Dockerfile
+  #   container_name: campus-job
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/job_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     REDIS_HOST: redis
+  #   ports:
+  #     - "${JOB_SERVICE_PORT:-8084}:8084"
+  #   networks:
+  #     - campus-network
+
+  # APPLICATION SERVICE
+
+  # application-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/application-service/Dockerfile
+  #   container_name: campus-application
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/application_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #   ports:
+  #     - "${APPLICATION_SERVICE_PORT:-8085}:8085"
+  #   networks:
+  #     - campus-network
+
+  # INTERVIEW SERVICE
+
+  # interview-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/interview-service/Dockerfile
+  #   container_name: campus-interview
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/interview_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #   ports:
+  #     - "${INTERVIEW_SERVICE_PORT:-8086}:8086"
+  #   networks:
+  #     - campus-network
+
+  # NOTIFICATION SERVICE
+
+  # notification-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/notification-service/Dockerfile
+  #   container_name: campus-notification
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     MAIL_USERNAME: ${MAIL_USERNAME}
+  #     MAIL_PASSWORD: ${MAIL_PASSWORD}
+  #   ports:
+  #     - "${NOTIFICATION_SERVICE_PORT:-8087}:8087"
+  #   networks:
+  #     - campus-network
+
+  # ANALYTICS SERVICE
+
+  # analytics-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/analytics-service/Dockerfile
+  #   container_name: campus-analytics
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #     eureka-server:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/analytics_db
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     REDIS_HOST: redis
+  #   ports:
+  #     - "${ANALYTICS_SERVICE_PORT:-8088}:8088"
+  #   networks:
+  #     - campus-network
+
+volumes:
+  postgres-data:
+    driver: local
+  minio-data:
+    driver: local
+
+networks:
+  campus-network:
+    driver: bridge
+    name: campus-network
