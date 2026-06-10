@@ -1,177 +1,191 @@
-package com.campus.job.service;
+package com.campus.application.service;
 
-import com.campus.events.JobCreatedEvent;
-import com.campus.job.client.StudentServiceClient;
-import com.campus.job.dto.request.CreateJobRequest;
-import com.campus.job.dto.request.UpdateJobRequest;
-import com.campus.job.dto.response.EligibilityResponse;
-import com.campus.job.dto.response.JobResponse;
-import com.campus.job.dto.response.StudentProfileDto;
-import com.campus.job.entity.Job;
-import com.campus.job.exception.AccessDeniedException;
-import com.campus.job.exception.JobNotFoundException;
-import com.campus.job.kafka.JobEventProducer;
-import com.campus.job.repository.JobRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.campus.application.client.JobServiceClient;
+import com.campus.application.dto.request.SubmitApplicationRequest;
+import com.campus.application.dto.request.UpdateStatusRequest;
+import com.campus.application.dto.response.ApplicationResponse;
+import com.campus.application.dto.response.EligibilityResponse;
+import com.campus.application.entity.Application;
+import com.campus.application.exception.*;
+import com.campus.application.kafka.ApplicationEventProducer;
+import com.campus.application.repository.ApplicationRepository;
+import com.campus.events.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class JobService {
+public class ApplicationService {
 
-    private final JobRepository jobRepository;
-    private final JobEventProducer jobEventProducer;
-    private final StudentServiceClient studentServiceClient;
-    private final EligibilityEngine eligibilityEngine;
-    private final StringRedisTemplate redisTemplate;
-    private final ObjectMapper objectMapper;
-
-    private static final String CACHE_PREFIX = "job_feed:";
-    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
+    private final ApplicationRepository applicationRepository;
+    private final JobServiceClient jobServiceClient;
+    private final ApplicationEventProducer eventProducer;
 
     @Transactional
-    public JobResponse createJob(UUID recruiterId, CreateJobRequest request) {
-        Job job = Job.builder()
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .companyId(request.getCompanyId())
+    public ApplicationResponse submit(UUID studentId, SubmitApplicationRequest request) {
+        if (applicationRepository.existsByStudentIdAndJobId(studentId, request.getJobId())) {
+            throw new DuplicateApplicationException();
+        }
+
+        EligibilityResponse eligibility = jobServiceClient.checkEligibility(
+                request.getJobId(), studentId);
+
+        if (!eligibility.isEligible()) {
+            throw new EligibilityFailedException(eligibility.getReason());
+        }
+
+        Application application = Application.builder()
+                .studentId(studentId)
+                .jobId(request.getJobId())
+                .studentName(request.getStudentName())
+                .jobTitle(request.getJobTitle())
                 .companyName(request.getCompanyName())
-                .location(request.getLocation())
-                .ctc(request.getCtc())
-                .type(request.getType())
-                .minCgpa(request.getMinCgpa())
-                .eligibleBranches(request.getEligibleBranches() != null
-                        ? request.getEligibleBranches().toArray(new String[0])
-                        : new String[0])
-                .backlogsAllowed(request.getBacklogsAllowed() != null
-                        ? request.getBacklogsAllowed() : true)
-                .graduationYear(request.getGraduationYear())
-                .deadline(request.getDeadline())
-                .createdBy(recruiterId)
+                .companyId(request.getCompanyId())
                 .build();
 
-        job = jobRepository.save(job);
-        evictFeedCache();
+        application = applicationRepository.save(application);
 
-        JobCreatedEvent event = JobCreatedEvent.builder()
-                .jobId(job.getId())
-                .title(job.getTitle())
-                .companyId(job.getCompanyId())
-                .companyName(job.getCompanyName())
-                .location(job.getLocation())
-                .type(job.getType().name())
-                .minCgpa(job.getMinCgpa() != null ? job.getMinCgpa().doubleValue() : 0.0)
-                .eligibleBranches(job.getEligibleBranches() != null
-                        ? java.util.Arrays.asList(job.getEligibleBranches())
-                        : java.util.List.of())
-                .backlogsAllowed(job.isBacklogsAllowed())
-                .graduationYear(job.getGraduationYear())
+        eventProducer.publishSubmitted(ApplicationSubmittedEvent.builder()
+                .applicationId(application.getId())
+                .studentId(studentId)
+                .jobId(request.getJobId())
+                .studentName(request.getStudentName())
+                .jobTitle(request.getJobTitle())
+                .companyName(request.getCompanyName())
                 .timestamp(Instant.now())
-                .build();
+                .build());
 
-        jobEventProducer.publishJobCreated(event);
-
-        return toResponse(job);
+        return toResponse(application);
     }
 
-    public Page<JobResponse> getOpenJobs(Pageable pageable) {
-        return jobRepository.findByStatus(Job.JobStatus.OPEN, pageable)
-                .map(this::toResponse);
+    public List<ApplicationResponse> getByStudentId(UUID studentId) {
+        return applicationRepository.findByStudentId(studentId)
+                .stream().map(this::toResponse).toList();
     }
 
-    public JobResponse getById(UUID jobId) {
-        return toResponse(findById(jobId));
+    public List<ApplicationResponse> getByJobId(UUID jobId) {
+        return applicationRepository.findByJobId(jobId)
+                .stream().map(this::toResponse).toList();
     }
 
-    @Transactional
-    public JobResponse updateJob(UUID jobId, UUID requestingUserId,
-                                  String role, UpdateJobRequest request) {
-        Job job = findById(jobId);
-
-        if (!role.equals("ADMIN") && !job.getCreatedBy().equals(requestingUserId)) {
-            throw new AccessDeniedException();
-        }
-
-        if (request.getTitle() != null) job.setTitle(request.getTitle());
-        if (request.getDescription() != null) job.setDescription(request.getDescription());
-        if (request.getLocation() != null) job.setLocation(request.getLocation());
-        if (request.getCtc() != null) job.setCtc(request.getCtc());
-        if (request.getStatus() != null) job.setStatus(request.getStatus());
-        if (request.getMinCgpa() != null) job.setMinCgpa(request.getMinCgpa());
-        if (request.getBacklogsAllowed() != null) job.setBacklogsAllowed(request.getBacklogsAllowed());
-        if (request.getGraduationYear() != null) job.setGraduationYear(request.getGraduationYear());
-        if (request.getDeadline() != null) job.setDeadline(request.getDeadline());
-        if (request.getEligibleBranches() != null) {
-            job.setEligibleBranches(request.getEligibleBranches().toArray(new String[0]));
-        }
-
-        job = jobRepository.save(job);
-        evictFeedCache();
-        return toResponse(job);
+    public ApplicationResponse getById(UUID applicationId) {
+        return toResponse(findById(applicationId));
     }
 
     @Transactional
-    public void deleteJob(UUID jobId, UUID requestingUserId, String role) {
-        Job job = findById(jobId);
-        if (!role.equals("ADMIN") && !job.getCreatedBy().equals(requestingUserId)) {
+    public ApplicationResponse updateStatus(UUID applicationId, UUID requestingUserId,
+                                            String role, UpdateStatusRequest request) {
+        Application application = findById(applicationId);
+
+        if (!role.equals("RECRUITER") && !role.equals("ADMIN")) {
             throw new AccessDeniedException();
         }
-        jobRepository.delete(job);
-        evictFeedCache();
+
+        validateTransition(application.getStatus(), request.getStatus());
+
+        application.setStatus(request.getStatus());
+        if (request.getRecruiterNote() != null) {
+            application.setRecruiterNote(request.getRecruiterNote());
+        }
+
+        application = applicationRepository.save(application);
+
+        publishStatusEvent(application, request);
+
+        return toResponse(application);
     }
 
-    public EligibilityResponse checkEligibility(UUID jobId, UUID studentUserId) {
-        Job job = findById(jobId);
-        StudentProfileDto student = studentServiceClient.getStudentByUserId(studentUserId);
-        return eligibilityEngine.check(job, student);
+    @Transactional
+    public void withdraw(UUID applicationId, UUID studentId) {
+        Application application = findById(applicationId);
+
+        if (!application.getStudentId().equals(studentId)) {
+            throw new AccessDeniedException();
+        }
+
+        if (application.getStatus() != Application.ApplicationStatus.APPLIED) {
+            throw new InvalidStatusTransitionException(
+                    application.getStatus().name(), "WITHDRAWN");
+        }
+
+        eventProducer.publishWithdrawn(ApplicationWithdrawnEvent.builder()
+                .applicationId(application.getId())
+                .studentId(application.getStudentId())
+                .jobId(application.getJobId())
+                .timestamp(Instant.now())
+                .build());
+
+        applicationRepository.delete(application);
     }
 
-    private Job findById(UUID jobId) {
-        return jobRepository.findById(jobId)
-                .orElseThrow(() -> new JobNotFoundException("Job not found: " + jobId));
-    }
+    private void validateTransition(Application.ApplicationStatus current,
+                                    Application.ApplicationStatus next) {
+        boolean valid = switch (current) {
+            case APPLIED -> next == Application.ApplicationStatus.SHORTLISTED
+                    || next == Application.ApplicationStatus.REJECTED;
+            case SHORTLISTED -> next == Application.ApplicationStatus.OFFERED
+                    || next == Application.ApplicationStatus.REJECTED;
+            default -> false;
+        };
 
-    private void evictFeedCache() {
-        try {
-            var keys = redisTemplate.keys(CACHE_PREFIX + "*");
-            if (keys != null && !keys.isEmpty()) {
-                redisTemplate.delete(keys);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to evict job feed cache: {}", e.getMessage());
+        if (!valid) {
+            throw new InvalidStatusTransitionException(current.name(), next.name());
         }
     }
 
-    public JobResponse toResponse(Job job) {
-        return JobResponse.builder()
-                .id(job.getId())
-                .title(job.getTitle())
-                .description(job.getDescription())
-                .companyId(job.getCompanyId())
-                .companyName(job.getCompanyName())
-                .location(job.getLocation())
-                .ctc(job.getCtc())
-                .type(job.getType())
-                .status(job.getStatus())
-                .minCgpa(job.getMinCgpa())
-                .eligibleBranches(job.getEligibleBranches())
-                .backlogsAllowed(job.isBacklogsAllowed())
-                .graduationYear(job.getGraduationYear())
-                .deadline(job.getDeadline())
-                .createdBy(job.getCreatedBy())
-                .createdAt(job.getCreatedAt())
-                .updatedAt(job.getUpdatedAt())
+    private void publishStatusEvent(Application application, UpdateStatusRequest request) {
+        switch (application.getStatus()) {
+            case SHORTLISTED -> eventProducer.publishShortlisted(
+                    StudentShortlistedEvent.builder()
+                            .applicationId(application.getId())
+                            .studentId(application.getStudentId())
+                            .jobId(application.getJobId())
+                            .companyName(application.getCompanyName())
+                            .recruiterNote(application.getRecruiterNote())
+                            .timestamp(Instant.now())
+                            .build());
+
+            case OFFERED -> eventProducer.publishOfferReleased(
+                    OfferReleasedEvent.builder()
+                            .applicationId(application.getId())
+                            .studentId(application.getStudentId())
+                            .jobId(application.getJobId())
+                            .companyName(application.getCompanyName())
+                            .ctc(request.getCtc())
+                            .joiningDate(request.getJoiningDate())
+                            .timestamp(Instant.now())
+                            .build());
+
+            default -> log.debug("No event published for status: {}", application.getStatus());
+        }
+    }
+
+    private Application findById(UUID id) {
+        return applicationRepository.findById(id)
+                .orElseThrow(() -> new ApplicationNotFoundException(
+                        "Application not found: " + id));
+    }
+
+    public ApplicationResponse toResponse(Application app) {
+        return ApplicationResponse.builder()
+                .id(app.getId())
+                .studentId(app.getStudentId())
+                .jobId(app.getJobId())
+                .studentName(app.getStudentName())
+                .jobTitle(app.getJobTitle())
+                .companyName(app.getCompanyName())
+                .companyId(app.getCompanyId())
+                .status(app.getStatus())
+                .recruiterNote(app.getRecruiterNote())
+                .appliedAt(app.getAppliedAt())
+                .updatedAt(app.getUpdatedAt())
                 .build();
     }
 }

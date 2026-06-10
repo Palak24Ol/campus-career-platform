@@ -53,7 +53,7 @@
         <module>services/application-service</module>
 
 
-        <!-- <module>services/interview-service</module>  -->
+        <module>services/interview-service</module>
 
 
         <!-- <module>services/notification-service</module>-->
