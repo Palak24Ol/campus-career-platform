@@ -12,13 +12,12 @@ COPY services/company-service/pom.xml            services/company-service/pom.xm
 COPY services/job-service/pom.xml                services/job-service/pom.xml
 COPY services/application-service/pom.xml                services/application-service/pom.xml
 
-
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
         -q
 
 COPY shared/shared-events/src                    shared/shared-events/src
-COPY services/job-service/src                    services/job-service/src
+COPY services/application-service/src                    services/application-service/src
 
 RUN mvn install \
         -N \
@@ -39,18 +38,18 @@ RUN mvn clean package \
 
 FROM eclipse-temurin:17-jre-alpine AS runtime
 
-LABEL org.opencontainers.image.title="campus-job-service"
+LABEL org.opencontainers.image.title="campus-application-service"
 
 RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY --from=builder /workspace/services/job-service/target/*.jar app.jar
+COPY --from=builder /workspace/services/application-service/target/*.jar app.jar
 
 RUN addgroup -S campus && adduser -S campus -G campus
 USER campus
 
-EXPOSE 8084
+EXPOSE 8085
 
 ENTRYPOINT [ \
     "java", \

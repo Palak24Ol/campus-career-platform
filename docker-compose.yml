@@ -306,29 +306,29 @@ services:
 
     # APPLICATION SERVICE
 
-  # application-service:
-  #   build:
-  #     context: .
-  #     dockerfile: services/application-service/Dockerfile
-  #   container_name: campus-application
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     kafka:
-  #       condition: service_healthy
-  #     eureka-server:
-  #       condition: service_healthy
-  #   environment:
-  #     SPRING_PROFILES_ACTIVE: docker
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/application_db
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #   ports:
-  #     - "${APPLICATION_SERVICE_PORT:-8085}:8085"
-  #   networks:
-  #     - campus-network
+  application-service:
+    build:
+      context: .
+      dockerfile: services/application-service/Dockerfile
+    container_name: campus-application
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/application_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "${APPLICATION_SERVICE_PORT:-8085}:8085"
+    networks:
+      - campus-network
 
   # INTERVIEW SERVICE
 

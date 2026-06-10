@@ -10,6 +10,8 @@ COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
 COPY services/company-service/pom.xml            services/company-service/pom.xml
 COPY services/job-service/pom.xml                services/job-service/pom.xml
+COPY services/application-service/pom.xml                services/application-service/pom.xml
+
 
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
