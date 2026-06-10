@@ -44,6 +44,7 @@ COPY infrastructure/api-gateway/pom.xml          infrastructure/api-gateway/pom.
 COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
 COPY services/company-service/pom.xml            services/company-service/pom.xml
+COPY services/job-service/pom.xml                services/job-service/pom.xml
 
 
 # ── Layer: Dependency download ───────────────────────────────────────────────
@@ -67,6 +68,11 @@ COPY infrastructure/eureka-server/src            infrastructure/eureka-server/sr
 #         Required because eureka-server is in the same reactor and Maven
 #         needs shared-events to be resolvable (even though eureka-server
 #         doesn't directly depend on it, they're in the same multi-module project).
+
+RUN mvn install \
+        -N \
+        --no-transfer-progress \
+        -q
 RUN mvn clean install \
         -pl shared/shared-events \
         -DskipTests \

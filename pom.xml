@@ -47,7 +47,7 @@
         <module>services/company-service</module>
 
 
-        <!-- <module>services/job-service</module>        -->
+        <module>services/job-service</module>
 
 
         <!-- <module>services/application-service</module>-->

@@ -9,6 +9,7 @@ COPY infrastructure/api-gateway/pom.xml          infrastructure/api-gateway/pom.
 COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
 COPY services/company-service/pom.xml            services/company-service/pom.xml
+COPY services/job-service/pom.xml                services/job-service/pom.xml
 
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
@@ -16,6 +17,11 @@ RUN mvn dependency:go-offline \
 
 COPY shared/shared-events/src                    shared/shared-events/src
 COPY services/company-service/src                services/company-service/src
+
+RUN mvn install \
+        -N \
+        --no-transfer-progress \
+        -q
 
 RUN mvn clean install \
         -pl shared/shared-events \
