@@ -386,32 +386,32 @@ services:
 
   # ANALYTICS SERVICE
 
-  # analytics-service:
-  #   build:
-  #     context: .
-  #     dockerfile: services/analytics-service/Dockerfile
-  #   container_name: campus-analytics
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     kafka:
-  #       condition: service_healthy
-  #     eureka-server:
-  #       condition: service_healthy
-  #   environment:
-  #     SPRING_PROFILES_ACTIVE: docker
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/analytics_db
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     REDIS_HOST: redis
-  #   ports:
-  #     - "${ANALYTICS_SERVICE_PORT:-8088}:8088"
-  #   networks:
-  #     - campus-network
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: campus-analytics
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/analytics_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+    ports:
+      - "${ANALYTICS_SERVICE_PORT:-8088}:8088"
+    networks:
+      - campus-network
 
 volumes:
   postgres-data:

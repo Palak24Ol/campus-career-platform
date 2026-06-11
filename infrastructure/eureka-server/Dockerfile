@@ -48,6 +48,7 @@ COPY services/job-service/pom.xml                services/job-service/pom.xml
 COPY services/application-service/pom.xml                services/application-service/pom.xml
 COPY services/interview-service/pom.xml          services/interview-service/pom.xml
 COPY services/notification-service/pom.xml       services/notification-service/pom.xml
+COPY services/analytics-service/pom.xml          services/analytics-service/pom.xml
 
 
 # ── Layer: Dependency download ───────────────────────────────────────────────

@@ -10,7 +10,7 @@ COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
 COPY services/company-service/pom.xml            services/company-service/pom.xml
 COPY services/job-service/pom.xml                services/job-service/pom.xml
-COPY services/application-service/pom.xml                services/application-service/pom.xml
+COPY services/application-service/pom.xml        services/application-service/pom.xml
 COPY services/interview-service/pom.xml          services/interview-service/pom.xml
 COPY services/notification-service/pom.xml       services/notification-service/pom.xml
 COPY services/analytics-service/pom.xml          services/analytics-service/pom.xml
@@ -20,7 +20,7 @@ RUN mvn dependency:go-offline \
         -q
 
 COPY shared/shared-events/src                    shared/shared-events/src
-COPY services/company-service/src                services/company-service/src
+COPY services/analytics-service/src              services/analytics-service/src
 
 RUN mvn install \
         -N \
@@ -34,25 +34,25 @@ RUN mvn clean install \
         -q
 
 RUN mvn clean package \
-        -pl services/company-service \
+        -pl services/analytics-service \
         -DskipTests \
         --no-transfer-progress \
         -q
 
 FROM eclipse-temurin:17-jre-alpine AS runtime
 
-LABEL org.opencontainers.image.title="campus-company-service"
+LABEL org.opencontainers.image.title="campus-analytics-service"
 
 RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY --from=builder /workspace/services/company-service/target/*.jar app.jar
+COPY --from=builder /workspace/services/analytics-service/target/*.jar app.jar
 
 RUN addgroup -S campus && adduser -S campus -G campus
 USER campus
 
-EXPOSE 8083
+EXPOSE 8088
 
 ENTRYPOINT [ \
     "java", \

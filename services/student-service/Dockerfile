@@ -2,7 +2,8 @@ FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 
 WORKDIR /workspace
 
-COPY pom.xml ./pom.xml
+
+
 COPY shared/shared-events/pom.xml               shared/shared-events/pom.xml
 COPY infrastructure/eureka-server/pom.xml        infrastructure/eureka-server/pom.xml
 COPY infrastructure/api-gateway/pom.xml          infrastructure/api-gateway/pom.xml
@@ -13,6 +14,8 @@ COPY services/job-service/pom.xml                services/job-service/pom.xml
 COPY services/application-service/pom.xml                services/application-service/pom.xml
 COPY services/interview-service/pom.xml          services/interview-service/pom.xml
 COPY services/notification-service/pom.xml       services/notification-service/pom.xml
+COPY services/analytics-service/pom.xml          services/analytics-service/pom.xml
+
 
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
