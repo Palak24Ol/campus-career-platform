@@ -34,9 +34,15 @@ public class AnalyticsEventConsumer {
             log.info("Analytics: application event type={}", type);
 
             if ("ApplicationSubmitted".equals(type)) {
-                UUID companyId = UUID.fromString(event.path("companyId").asText());
+                String companyIdStr = event.path("companyId").asText(null);
+                if (companyIdStr == null || companyIdStr.equals("null")) {
+                    log.warn("ApplicationSubmitted event missing companyId, skipping");
+                    return;
+                }
+                UUID companyId = UUID.fromString(companyIdStr);
                 String companyName = event.path("companyName").asText("Unknown");
                 analyticsService.onApplicationSubmitted(companyId, companyName);
+
             } else if ("OfferReleased".equals(type)) {
                 String companyIdStr = event.path("companyId").asText(null);
                 if (companyIdStr == null || companyIdStr.equals("null")) {
@@ -45,9 +51,8 @@ public class AnalyticsEventConsumer {
                 }
                 UUID companyId = UUID.fromString(companyIdStr);
                 String companyName = event.path("companyName").asText("Unknown");
-                Long ctc = event.path("ctc").asLong(0);
+                Long ctc = event.hasNonNull("ctc") ? event.path("ctc").asLong() : null;
                 analyticsService.onOfferReleased(companyId, companyName, ctc);
-
             }
         } catch (Exception e) {
             log.error("Error processing application event: {}", e.getMessage(), e);
@@ -55,8 +60,10 @@ public class AnalyticsEventConsumer {
     }
 
     private String inferType(JsonNode event) {
-        if (event.has("jobTitle") && event.has("studentName")) return "ApplicationSubmitted";
-        if (event.has("ctc") && event.has("joiningDate")) return "OfferReleased";
+        // joiningDate can be null/absent, so check companyId + ctc presence for offer detection
+        if (event.has("ctc") && event.has("companyId") && event.has("studentId")
+                && !event.has("recruiterNote")) return "OfferReleased";
+        if (event.has("jobTitle") && event.has("studentName") && !event.has("ctc")) return "ApplicationSubmitted";
         if (event.has("recruiterNote") && !event.has("ctc")) return "StudentShortlisted";
         return "Unknown";
     }
