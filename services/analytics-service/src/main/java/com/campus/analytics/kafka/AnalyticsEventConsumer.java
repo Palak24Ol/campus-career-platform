@@ -38,7 +38,12 @@ public class AnalyticsEventConsumer {
                 String companyName = event.path("companyName").asText("Unknown");
                 analyticsService.onApplicationSubmitted(companyId, companyName);
             } else if ("OfferReleased".equals(type)) {
-                UUID companyId = UUID.fromString(event.path("companyId").asText());
+                String companyIdStr = event.path("companyId").asText(null);
+                if (companyIdStr == null || companyIdStr.equals("null")) {
+                    log.warn("OfferReleased event missing companyId, skipping");
+                    return;
+                }
+                UUID companyId = UUID.fromString(companyIdStr);
                 String companyName = event.path("companyName").asText("Unknown");
                 Long ctc = event.path("ctc").asLong(0);
                 analyticsService.onOfferReleased(companyId, companyName, ctc);
