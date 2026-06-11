@@ -358,31 +358,31 @@ services:
 
   # NOTIFICATION SERVICE
 
-  # notification-service:
-  #   build:
-  #     context: .
-  #     dockerfile: services/notification-service/Dockerfile
-  #   container_name: campus-notification
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     kafka:
-  #       condition: service_healthy
-  #     eureka-server:
-  #       condition: service_healthy
-  #   environment:
-  #     SPRING_PROFILES_ACTIVE: docker
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     MAIL_USERNAME: ${MAIL_USERNAME}
-  #     MAIL_PASSWORD: ${MAIL_PASSWORD}
-  #   ports:
-  #     - "${NOTIFICATION_SERVICE_PORT:-8087}:8087"
-  #   networks:
-  #     - campus-network
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: campus-notification
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-campus}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-campus_secret}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8087}:8087"
+    networks:
+      - campus-network
 
   # ANALYTICS SERVICE
 

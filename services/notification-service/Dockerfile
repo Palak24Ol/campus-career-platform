@@ -10,7 +10,7 @@ COPY services/auth-service/pom.xml               services/auth-service/pom.xml
 COPY services/student-service/pom.xml            services/student-service/pom.xml
 COPY services/company-service/pom.xml            services/company-service/pom.xml
 COPY services/job-service/pom.xml                services/job-service/pom.xml
-COPY services/application-service/pom.xml                services/application-service/pom.xml
+COPY services/application-service/pom.xml        services/application-service/pom.xml
 COPY services/interview-service/pom.xml          services/interview-service/pom.xml
 COPY services/notification-service/pom.xml       services/notification-service/pom.xml
 
@@ -19,12 +19,13 @@ RUN mvn dependency:go-offline \
         -q
 
 COPY shared/shared-events/src                    shared/shared-events/src
-COPY services/student-service/src                services/student-service/src
+COPY services/notification-service/src           services/notification-service/src
 
 RUN mvn install \
         -N \
         --no-transfer-progress \
         -q
+
 RUN mvn clean install \
         -pl shared/shared-events \
         -DskipTests \
@@ -32,25 +33,25 @@ RUN mvn clean install \
         -q
 
 RUN mvn clean package \
-        -pl services/student-service \
+        -pl services/notification-service \
         -DskipTests \
         --no-transfer-progress \
         -q
 
 FROM eclipse-temurin:17-jre-alpine AS runtime
 
-LABEL org.opencontainers.image.title="campus-student-service"
+LABEL org.opencontainers.image.title="campus-notification-service"
 
 RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY --from=builder /workspace/services/student-service/target/*.jar app.jar
+COPY --from=builder /workspace/services/notification-service/target/*.jar app.jar
 
 RUN addgroup -S campus && adduser -S campus -G campus
 USER campus
 
-EXPOSE 8082
+EXPOSE 8087
 
 ENTRYPOINT [ \
     "java", \

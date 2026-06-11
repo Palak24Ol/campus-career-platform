@@ -56,7 +56,7 @@
         <module>services/interview-service</module>
 
 
-        <!-- <module>services/notification-service</module>-->
+        <module>services/notification-service</module>
 
         <!-- <module>services/analytics-service</module>  -->
     </modules>

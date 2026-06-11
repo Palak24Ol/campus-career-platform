@@ -46,12 +46,25 @@ public class GlobalExceptionHandler {
                 .body(build(HttpStatus.BAD_REQUEST, message, request.getRequestURI()));
     }
 
+    @ExceptionHandler(feign.FeignException.class)
+    public ResponseEntity<ErrorResponse> handleFeignException(
+            feign.FeignException ex, HttpServletRequest request) {
+        if (ex.status() == 404) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(build(HttpStatus.NOT_FOUND,
+                            "Application not found", request.getRequestURI()));
+        }
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(build(HttpStatus.BAD_GATEWAY,
+                        "Downstream service error: " + ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(build(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "An unexpected error occurred", request.getRequestURI()));
+                        ex.getMessage(), request.getRequestURI()));
     }
 
     private ErrorResponse build(HttpStatus status, String message, String path) {

@@ -5,7 +5,6 @@ import com.campus.job.dto.response.StudentProfileDto;
 import com.campus.job.entity.Job;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 

@@ -12,6 +12,7 @@ COPY services/company-service/pom.xml            services/company-service/pom.xm
 COPY services/job-service/pom.xml                services/job-service/pom.xml
 COPY services/application-service/pom.xml        services/application-service/pom.xml
 COPY services/interview-service/pom.xml          services/interview-service/pom.xml
+COPY services/notification-service/pom.xml       services/notification-service/pom.xml
 
 RUN mvn dependency:go-offline \
         --no-transfer-progress \
